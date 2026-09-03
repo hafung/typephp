@@ -1,5 +1,25 @@
 <?php
 
+function addTypedInts(int $a, int $b): int
+{
+    return $a + $b;
+}
+
+function subtractTypedInts(int $a, int $b): int
+{
+    return $a - $b;
+}
+
+function multiplyTypedInts(int $a, int $b): int
+{
+    return $a * $b;
+}
+
+function addNestedTypedInts(int $a, int $b): int
+{
+    return ($a + $b) + 1;
+}
+
 function divTypedInts(int $a, int $b): float
 {
     return $a / $b;

@@ -11,6 +11,16 @@ use TypePhp\CompilerTest;
  */
 final class TypedScalarArithmeticCodegenTest extends \BaseTest
 {
+    public function testTypedIntReturnUsesCheckedNativeFastPath(): void
+    {
+        $code = $this->compileFixture();
+
+        self::assertSame(1, substr_count($code, 'php::detail::intAddOverflow('));
+        self::assertSame(1, substr_count($code, 'php::detail::intSubOverflow('));
+        self::assertSame(1, substr_count($code, 'php::detail::intMulOverflow('));
+        self::assertStringContainsString('((php::Var(a)) + (b))', $code);
+    }
+
     public function testTypedIntDivisionRoutesThroughVariant(): void
     {
         $code = $this->compileFixture();

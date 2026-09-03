@@ -19,6 +19,77 @@ use PhpParser\Modifiers;
 
 trait BinaryOpTrait
 {
+    /**
+     * Emit a speculative native fast path for a strict int return.
+     *
+     * Ordinary PHP integer arithmetic remains dynamic because overflow widens
+     * the result to float. At an exact `: int` return boundary that widened
+     * value can only raise TypeError, so the common non-overflowing path may
+     * return the checked native result directly. The overflow branch still
+     * materializes a float Variant and uses the normal return-type diagnostic.
+     *
+     * Operands are deliberately restricted to reusable scalar values. More
+     * complex expressions can carry side effects or statement-scoped cleanup;
+     * evaluating those twice on the overflow branch would be incorrect.
+     */
+    protected function tryParseCheckedIntArithmeticReturn(NodeAbstract $expr): ?string
+    {
+        if ($this->nativeTypes
+            || $this->context->inClosure
+            || $this->getReturnType() !== Type::INT
+            || $this->functionDef->returnTypeCheck
+            || !($expr instanceof Expr\BinaryOp\Plus
+                || $expr instanceof Expr\BinaryOp\Minus
+                || $expr instanceof Expr\BinaryOp\Mul)
+            || !$this->isReusableCheckedIntOperand($expr->left)
+            || !$this->isReusableCheckedIntOperand($expr->right)
+            || $this->detectTypeOfExpr($expr->left) !== Type::INT
+            || $this->detectTypeOfExpr($expr->right) !== Type::INT
+            || $this->exprCanOverflowInt($expr->left)
+            || $this->exprCanOverflowInt($expr->right)
+            || $this->isExplicitNativeArithmeticExpr($expr->left)
+            || $this->isExplicitNativeArithmeticExpr($expr->right)
+        ) {
+            return null;
+        }
+
+        $left = $this->parseNumericIdentifier($expr->left);
+        $right = $this->parseNumericIdentifier($expr->right);
+        $this->checkVarMustExist($expr->left, $left);
+        $this->checkVarMustExist($expr->right, $right);
+
+        [$operator, $overflowHelper] = match (true) {
+            $expr instanceof Expr\BinaryOp\Plus => ['+', 'php::detail::intAddOverflow'],
+            $expr instanceof Expr\BinaryOp\Minus => ['-', 'php::detail::intSubOverflow'],
+            default => ['*', 'php::detail::intMulOverflow'],
+        };
+        $result = $this->addTmpVar(Type::INT);
+        $overflow = $this->genTmpVarName();
+
+        $code = 'if (UNEXPECTED(' . $overflowHelper . '(' . $left . ', ' . $right . ', &' . $result . '))) {' . PHP_EOL;
+        $this->indentLevel++;
+        $code .= $this->getIndent() . Type::VAR . ' ' . $overflow . ' = static_cast<' . Type::FLOAT . '>(' . $left . ') '
+            . $operator . ' static_cast<' . Type::FLOAT . '>(' . $right . ');' . PHP_EOL;
+        $code .= $this->genStrictScalarReturnCheck($overflow, Type::INT);
+        $this->indentLevel--;
+        $code .= $this->getIndent() . '}' . PHP_EOL;
+        $code .= $this->getIndent() . 'return ' . $result . ';';
+        return $code;
+    }
+
+    protected function isReusableCheckedIntOperand(NodeAbstract $expr): bool
+    {
+        if ($this->isVarExpr($expr)) {
+            if (!is_string($expr->name)) {
+                return false;
+            }
+            $name = $this->parseIdentifier($expr);
+            return $this->hasVar($name) && $this->getVarType($name) === Type::INT;
+        }
+
+        return $this->constantIntValue($expr) !== null;
+    }
+
     protected function parseBinaryOp(NodeAbstract $left, NodeAbstract $right, string $op): string
     {
         $this->assertExprCanBeUsedAsValue($left, 'binary operand');

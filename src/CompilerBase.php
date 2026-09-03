@@ -2535,6 +2535,10 @@ class CompilerBase implements PropertyAccessContext
             $this->context->afterStmtLines[] = $this->getIndent() . 'return ' . $finalReturn . ';';
             return $tmpVar . ' = ' . $returnExpr . ';';
         }
+        $checkedIntReturn = $this->tryParseCheckedIntArithmeticReturn($v->expr);
+        if ($checkedIntReturn !== null) {
+            return $checkedIntReturn;
+        }
         $expr = $this->parseExprAsValue($v->expr);
         $returnType = $this->getReturnType();
 

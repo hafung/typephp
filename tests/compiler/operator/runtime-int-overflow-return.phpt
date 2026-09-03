@@ -32,6 +32,10 @@ function multiplyInts(int $left, int $right): int
 
 function main(): void
 {
+    var_dump(addInts(20, 22));
+    var_dump(subtractInts(20, 22));
+    var_dump(multiplyInts(-6, 7));
+
     foreach ([
         static fn (): int => addInts(PHP_INT_MAX, 1),
         static fn (): int => subtractInts(PHP_INT_MIN, 1),
@@ -52,6 +56,9 @@ function main(): void
 }
 ?>
 --EXPECTF--
+int(42)
+int(-2)
+int(-42)
 addInts(): Return value must be of type int, float returned
 subtractInts(): Return value must be of type int, float returned
 multiplyInts(): Return value must be of type int, float returned
